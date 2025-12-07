@@ -14,79 +14,106 @@ TASAS = {
     2024: 916.85, 2025: 1215.46,
 }
 
-# ---------------------------------------------------------
-# Función de conversión (igual que tu original)
-# ---------------------------------------------------------
-def convertir(*args):
-    texto = entrada_valor.get()
+YEARS = sorted(TASAS.keys())
+PLACEHOLDER = "—"
 
-    try:
-        valor_inicial = float(texto)
-        año_origen = int(combo_origen.get())
-        año_destino = int(combo_destino.get())
 
-        tasa_origen = TASAS[año_origen]
-        tasa_destino = TASAS[año_destino]
+def format_amount(value: float, suffix: str = "ARS") -> str:
+    """Formatea un número con separador de miles y 2 decimales.
 
-        usd = valor_inicial / tasa_origen
-        valor_destino = usd * tasa_destino
+    No depende de locale para mantener consistencia en diferentes entornos.
+    """
+    return f"{value:,.2f} {suffix}"
 
-        resultado_usd.set(f"{usd:,.2f} USD")
-        resultado_final.set(f"{valor_destino:,.2f} ARS")
 
-    except:
-        resultado_usd.set("—")
-        resultado_final.set("—")
+def compute_conversion(text: str, origen: int, destino: int) -> tuple:
+    """Convierte `text` (valor en ARS del año `origen`) a USD y ARS del `destino`.
 
-# ---------------------------------------------------------
-# CONFIGURACIÓN DE LA APP CTK
-# ---------------------------------------------------------
-ctk.set_appearance_mode("dark")      # "light" | "dark" | "system"
-ctk.set_default_color_theme("blue")  # temas: blue, dark-blue, green
+    Lanza ValueError si la entrada no es numérica y KeyError si falta una tasa.
+    """
+    if not text or text.strip() == "":
+        raise ValueError("valor vacío")
 
-app = ctk.CTk()
-app.title("Conversor ARS por año → USD → ARS (CTK)")
-app.geometry("420x520")
+    # Permitimos comas en la entrada (p.ej. "1,234.56") y espacios
+    cleaned = text.replace(",", "").replace(" ", "")
+    valor_inicial = float(cleaned)
 
-# ---------------------------------------------------------
-# VARIABLES
-# ---------------------------------------------------------
-resultado_usd = StringVar()
-resultado_final = StringVar()
+    tasa_origen = TASAS[origen]
+    tasa_destino = TASAS[destino]
 
-# ---------------------------------------------------------
-# INTERFAZ
-# ---------------------------------------------------------
-frame = ctk.CTkFrame(app, corner_radius=12)
-frame.pack(pady=30, padx=20, fill="both", expand=False)
+    usd = valor_inicial / tasa_origen
+    valor_destino = usd * tasa_destino
 
-ctk.CTkLabel(frame, text="Valor en pesos del año origen:").pack(pady=(15, 5))
-entrada_valor = ctk.CTkEntry(frame, width=200)
-entrada_valor.pack()
-entrada_valor.bind("<KeyRelease>", convertir)
+    return usd, valor_destino
 
-# Año origen
-ctk.CTkLabel(frame, text="Año origen:").pack(pady=(15, 5))
-combo_origen = ctk.CTkComboBox(frame, values=[str(a) for a in TASAS.keys()], width=150)
-combo_origen.set("2014")
-combo_origen.pack()
-combo_origen.bind("<<ComboboxSelected>>", convertir)
 
-# Año destino
-ctk.CTkLabel(frame, text="Año destino:").pack(pady=(15, 5))
-combo_destino = ctk.CTkComboBox(frame, values=[str(a) for a in TASAS.keys()], width=150)
-combo_destino.set("2025")
-combo_destino.pack()
-combo_destino.bind("<<ComboboxSelected>>", convertir)
+class ArsConverterApp:
+    """Encapsula la aplicación CTk para convertir ARS (por año) → USD → ARS."""
 
-# Resultados
-ctk.CTkLabel(frame, text="Equivalente en USD:", font=("Arial", 15)).pack(pady=(20, 5))
-ctk.CTkLabel(frame, textvariable=resultado_usd, font=("Arial", 20, "bold")).pack()
+    def __init__(self):
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
 
-ctk.CTkLabel(frame, text="Equivalente en pesos del año destino:", font=("Arial", 15)).pack(pady=(20, 5))
-ctk.CTkLabel(frame, textvariable=resultado_final, font=("Arial", 25, "bold")).pack()
+        self.app = ctk.CTk()
+        self.app.title("Conversor ARS por año → USD → ARS (CTK)")
+        self.app.geometry("420x520")
 
-# ---------------------------------------------------------
-# LOOP
-# ---------------------------------------------------------
-app.mainloop()
+        # Variables de estado
+        self.resultado_usd = StringVar(value=PLACEHOLDER)
+        self.resultado_final = StringVar(value=PLACEHOLDER)
+
+        # Interfaz
+        self._build_ui()
+
+    def _label(self, parent, text, font=None, pady=(0, 0)):
+        ctk.CTkLabel(parent, text=text, font=font).pack(pady=pady)
+
+    def _crear_combobox_anio(self, parent, default: int):
+        combo = ctk.CTkComboBox(parent, values=[str(y) for y in YEARS], width=150)
+        combo.set(str(default))
+        combo.pack()
+        combo.bind("<<ComboboxSelected>>", lambda e: self.on_change())
+        return combo
+
+    def _build_ui(self):
+        frame = ctk.CTkFrame(self.app, corner_radius=12)
+        frame.pack(pady=30, padx=20, fill="both", expand=False)
+
+        self._label(frame, "Valor en pesos del año origen:", pady=(15, 5))
+        self.entrada_valor = ctk.CTkEntry(frame, width=200)
+        self.entrada_valor.pack()
+        self.entrada_valor.bind("<KeyRelease>", lambda e: self.on_change())
+
+        self._label(frame, "Año origen:", pady=(15, 5))
+        self.combo_origen = self._crear_combobox_anio(frame, default=2014)
+
+        self._label(frame, "Año destino:", pady=(15, 5))
+        self.combo_destino = self._crear_combobox_anio(frame, default=2025)
+
+        self._label(frame, "Equivalente en USD:", font=("Arial", 15), pady=(20, 5))
+        ctk.CTkLabel(frame, textvariable=self.resultado_usd, font=("Arial", 20, "bold")).pack()
+
+        self._label(frame, "Equivalente en pesos del año destino:", font=("Arial", 15), pady=(20, 5))
+        ctk.CTkLabel(frame, textvariable=self.resultado_final, font=("Arial", 25, "bold")).pack()
+
+    def on_change(self, *_):
+        try:
+            texto = self.entrada_valor.get()
+            año_origen = int(self.combo_origen.get())
+            año_destino = int(self.combo_destino.get())
+
+            usd, valor_destino = compute_conversion(texto, año_origen, año_destino)
+
+            self.resultado_usd.set(format_amount(usd, "USD"))
+            self.resultado_final.set(format_amount(valor_destino, "ARS"))
+
+        except (ValueError, KeyError):
+            self.resultado_usd.set(PLACEHOLDER)
+            self.resultado_final.set(PLACEHOLDER)
+
+    def run(self):
+        self.app.mainloop()
+
+
+if __name__ == "__main__":
+    ArsConverterApp().run()

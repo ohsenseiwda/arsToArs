@@ -1,7 +1,6 @@
 import customtkinter as ctk
 from tkinter import StringVar
-import os
-import requests
+
 
 # ---------------------------------------------------------
 # Tasas promedio anuales USD→ARS
